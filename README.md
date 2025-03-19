@@ -111,7 +111,7 @@ sudo docker cp master-data.sql mysql-slave:/master-data.sql
 ```
 sudo docker exec -it mysql-slave bash
 
-mysql -uroot -proot < /master-data.sql
+mysql -uroot -proot database_name < /master-data.sql
 
 mysql -uroot -proot
 
