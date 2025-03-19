@@ -225,7 +225,7 @@ USE employees;
 SELECT * FROM departments;
 ```
 
-If the data appears, replication is working correctly! 🎉
+If the data appears, replication is working correctly!
 
 ---
 
