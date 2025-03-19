@@ -97,6 +97,8 @@ sudo docker exec supersee mysqldump -uroot -proot --single-transaction --databas
 # For direct sync docker to docker with snapshot mysqldump
 sudo docker exec supersee mysqldump -uroot -proot --databases supersee --master-data=2 --single-transaction --flush-logs --hex-blob | sudo docker exec -i supersee_slave mysql -uroot -proot
 ```
+- Note : `--single-transaction` is for without lock database it can create a backup files.
+
 
 #### Now we first import backup of master database of master-data.sql in slave container.
 ```bash
