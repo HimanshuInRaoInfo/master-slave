@@ -101,7 +101,7 @@ sudo docker exec supersee mysqldump -uroot -proot --single-transaction --master-
 ```
 - Note : <br>
 `--single-transaction` is for without lock database it can create a backup files. <br>
-`--master-data=2` for getting log_file_name log_file_pos in backup sql file.
+`--master-data=2` for getting log_file_name log_file_pos in backup sql file. <br>
 `--set-gtid-purged=ON` for set the gtid status on
 
 #### Now we first import backup of master database of master-data.sql in slave container.
