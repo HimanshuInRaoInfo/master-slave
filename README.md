@@ -11,7 +11,7 @@ sudo docker network create mysql-net
 ### Step 2: Create Master Container Where Your Current Database Locate
 ```bash
 # Start master container
-sudo docker run --name supersee --network mysql-net -e MYSQL_ROOT_PASSWORD=root -p 3306:3306 -d mysql:8.0
+sudo docker run --name supersee --network <NETWORK_NAME> -e MYSQL_ROOT_PASSWORD=root -p 3306:3306 -d mysql:8.0
 ```
 
 ---
@@ -28,17 +28,19 @@ cd /etc/mysql
 # if my.cnf not created then create it first and then add this lines with this code
 echo "[mysqld]
 server-id=1
-log-bin=mysql-bin
+log-bin=mysql-bin 
 binlog-do-db=supersee
 binlog-format=ROW
 bind-address=0.0.0.0
+gtid_mode=ON
+enforce-gtid-consistency=ON
 " > my.cnf
 
 
 # now we restart the container 
 sudo docker restart supersee
 ```
-- Note for master config file ` my.cnf ` use this configuration <br>
+- Note for master config file ` my.cnf ` | `C:\ProgramData\MySQL\MySQL Server 8.0\my.ini` use this configuration <br>
   ```
   [mysqld]
   server-id=1 
@@ -46,6 +48,8 @@ sudo docker restart supersee
   binlog-do-db=supersee 
   binlog-format=ROW 
   bind-address=0.0.0.0 
+  gtid_mode=ON
+  enforce-gtid-consistency=ON
   ```
 
 ---
@@ -54,8 +58,17 @@ sudo docker restart supersee
 #### Create Slave Container
 ```bash
 # Start slave container
-sudo docker run --name mysql-slave --network mysql-net -e MYSQL_ROOT_PASSWORD=root -p 3308:3306 -d mysql:8.0 --server-id=2 --log-bin=mysql-bin --relay-log=mysql-relay-bin --binlog-format=ROW
+sudo docker run --name mysql-slave --network <NETWORK NAME> -e MYSQL_ROOT_PASSWORD=root -p 3308:3306 -d mysql:8.0 --server-id=2 --log-bin=mysql-bin --relay-log=mysql-relay-bin --binlog-format=ROW --gtid-mode=ON --enforce-gtid-consistency=ON
 ```
+- Note for slave/replica config file ` my.cnf ` | `C:\ProgramData\MySQL\MySQL Server 8.0\my.ini` use this configuration <br>
+  ```
+  [mysqld]
+  server-id=2
+  relay-log=mysql-relay-bin
+  log-bin=mysql-bin
+  gtid_mode=ON
+  enforce_gtid_consistency=ON
+  ```
 
 ---
 
@@ -81,28 +94,22 @@ SHOW MASTER STATUS;
 
 #### After configured successfully user export backup database of current in master side.
 ```bash
-
 USE <databasename>;
 
-FLUSH TABLES WITH READ LOCK;
-
-# Now take the backup for creating backup sql file and transfer with it
-sudo docker exec -it supersee mysqldump -uroot -proot --databases supersee --master-data=2 > master-data.sql
-
-UNLOCK TABLES;
-
 # For taking backup without lock the table and maintain consistency use this way
-sudo docker exec supersee mysqldump -uroot -proot --single-transaction --databases supersee > /your-path/backup.sql
-
-# For direct sync docker to docker with snapshot mysqldump
-sudo docker exec supersee mysqldump -uroot -proot --databases supersee --master-data=2 --single-transaction --flush-logs --hex-blob | sudo docker exec -i supersee_slave mysql -uroot -proot
+sudo docker exec supersee mysqldump -uroot -proot --single-transaction --master-data=2 --flush-logs --hex-blob --set-gtid-purged=ON --databases supersee > /your-path/backup.sql
 ```
-- Note : `--single-transaction` is for without lock database it can create a backup files.
-
+- Note : <br>
+`--single-transaction` is for without lock database it can create a backup files. <br>
+`--master-data=2` for getting log_file_name log_file_pos in backup sql file.
+`--set-gtid-purged=ON` for set the gtid status on
 
 #### Now we first import backup of master database of master-data.sql in slave container.
 ```bash
 sudo docker cp master-data.sql mysql-slave:/master-data.sql
+
+# Direct import in MySQL Slave
+SOURCE 'PATH'
 
 # It will save in bash of container or without docker don't take this step those directly goto the next step of importing database in slave.
 ```
@@ -114,8 +121,6 @@ sudo docker exec -it mysql-slave bash
 mysql -uroot -proot database_name < /master-data.sql
 
 mysql -uroot -proot
-
-SHOW MASTER STATUS;
 ```
 
 ---
@@ -129,25 +134,15 @@ docker exec -it mysql-slave mysql -uroot -proot
 
 #### Configure Slave
 ```sql
-
--- First check master status on master side
--- master log file , master log pos THIS WILL PRINTS LIKE THIS WAY
-
-'
-mysql> show master status;
-+------------------+----------+--------------+------------------+-------------------+
-| File             | Position | Binlog_Do_DB | Binlog_Ignore_DB | Executed_Gtid_Set |
-+------------------+----------+--------------+------------------+-------------------+
-| mysql-bin.000002 |      613 | supersee     |                  |                   |
-+------------------+----------+--------------+------------------+-------------------+
-'
-
+STOP SLAVE;
+-- On Slave Side Use This Configuration.
+-- With GTID Configuration.
 CHANGE MASTER TO
   MASTER_HOST='Master Host Name Ex. supersee',
   MASTER_USER='<username>',
   MASTER_PASSWORD='<password>',
-  MASTER_LOG_FILE='<master log file name>',
-  MASTER_LOG_POS=<logPos>;
+  MASTER_AUTO_POSITION=1;
+
 
 START SLAVE;
 ```
@@ -241,3 +236,6 @@ docker logs mysql-slave
 ```bash
 docker network inspect mysql-net
 ```
+
+### For GTID Information use this document :
+- https://dev.mysql.com/doc/refman/8.4/en/replication-gtids-howto.html
